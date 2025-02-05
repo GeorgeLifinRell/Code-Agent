@@ -1,0 +1,10 @@
+langchain
+langchain-community==0.3.16
+langchain_huggingface
+huggingface_hub
+python-dotenv
+sentence-transformers
+faiss-cpu
+gitpython
+streamlit
+watchdog
