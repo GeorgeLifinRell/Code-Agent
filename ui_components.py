@@ -3,17 +3,17 @@ import os
 import streamlit as st
 from constants import REPOSITORY_PATH
 from anytree.exporter import DictExporter
-from preprocessing import build_file_tree
-from preprocessing import (
+from repository_handler import build_file_tree
+from repository_handler import (
     fetch_repository,
     split_repository_documents,
     parse_and_print_repository
 )
-from vectorization import (
+from vectorization_handler import (
     generate_and_store_embeddings,
     load_faiss_vector_store
 )
-from llm_inference import (
+from llm_handler import (
     get_llm,
     query_llm
 )
