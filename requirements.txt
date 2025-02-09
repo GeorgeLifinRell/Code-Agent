@@ -4,8 +4,10 @@ faiss-cpu
 gitpython
 huggingface_hub
 langchain
+langchain-core==0.3.34
 langchain-community==0.3.16
 langchain_huggingface
+networkx
 python-dotenv
 sentence-transformers
 streamlit
