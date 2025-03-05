@@ -1,15 +1,17 @@
 import json
+import numpy as np
 import os
 import streamlit as st
 from constants import REPOSITORY_PATH
 from anytree.exporter import DictExporter
 from repository_handler import build_file_tree
 from repository_handler import (
-    fetch_repository,
-    split_repository_documents
+    load_repository_documents
 )
 from vectorization_handler import (
-    generate_and_store_embeddings,
+    generate_and_save_document_embeddings,
+    get_query_embedding,
+    create_and_save_faiss_index,
     load_faiss_vector_store
 )
 from llm_handler import (
@@ -23,6 +25,11 @@ from constants import (
 )
 from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
 from langchain_community.vectorstores.faiss import FAISS
+
+hf_embeddings = HuggingFaceInferenceAPIEmbeddings(
+            api_key=os.getenv("HF_TOKEN"),
+            model_name=EMBEDDING_MODEL_NAME
+            )
 
 def sidebar_content():
     """Render sidebar content"""
@@ -49,7 +56,7 @@ def print_file_tree(repo_path=REPOSITORY_PATH, repo_url=None):
     st.write(f"Repository path: {repo_path}")
     if os.listdir(repo_path) == []:
         try:
-            fetch_repository(
+            load_repository_documents(
                 repo_url=repo_url
             )
         except Exception as e:
@@ -61,84 +68,69 @@ def print_file_tree(repo_path=REPOSITORY_PATH, repo_url=None):
     st.json(json.dumps(exporter.export(file_tree), indent=2))
 
 def similarity_search_content():
-    """
-    Render the content for similarity search functionality
-    """
+    """Render the content for similarity search functionality"""
     st.subheader("Use the URL of the repository to do vector similarity search")
     repo_url = st.text_input("Enter the repository URL")
+    branch = st.text_input("Enter the branch name", value="main")
     
     if repo_url:
-        st.write(f"Repository URL: {repo_url}")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("Get Repository Tree"):
-                print_file_tree(repo_url=repo_url)
-                
-        with col2:
-            if st.button("Process Repository"):
-                with st.spinner("Fetching repository..."):
-                    try:
-                        repo_documents = fetch_repository(repo_url)
-                        if not repo_documents:
-                            st.error("No documents found in repository")
-                            return
-                            
-                        parsed_repo = split_repository_documents(repo_documents)
-                        if parsed_repo:
-                            st.success(f"Parsed repository contains {len(parsed_repo)} documents.")
-                            
-                            with st.spinner(f"Generating embeddings using {EMBEDDING_MODEL_NAME}..."):
-                                vector_store = generate_and_store_embeddings(parsed_repo, EMBEDDING_MODEL_NAME)
-                                if vector_store:
-                                    vector_store.save_local(VECTOR_STORE_DIR)
-                                    st.success("Embeddings generated and stored successfully!")
-                                else:
-                                    st.error("Failed to generate embeddings")
-                        else:
-                            st.error("Failed to parse the repository or repository is empty.")
-                    except Exception as e:
-                        st.error(f"Error processing repository: {str(e)}")
-
-    # Query section
-    if os.path.exists(VECTOR_STORE_DIR):
-        query = st.text_input("Enter your query")
-        if query:
-            with st.spinner("Processing query..."):
+        # Process repository
+        if st.button("Process Repository"):
+            with st.spinner("Processing repository..."):
                 try:
-                    embeddings = HuggingFaceInferenceAPIEmbeddings(
-                        api_key=os.getenv("HF_TOKEN"),
-                        model_name=EMBEDDING_MODEL_NAME
-                    )
-                    
-                    # Verify embeddings are working
-                    test_embedding = embeddings.embed_query("test")
-                    if not test_embedding:
-                        st.error("Failed to generate embeddings. Check your HF_TOKEN.")
-                        return
+                    repo_documents = load_repository_documents(repo_url, branch=branch)
+                    if repo_documents:
+                        # Show document preview
+                        st.success(f"Found {len(repo_documents)} documents in repository")
+                        with st.expander("Preview First 5 Documents"):
+                            for i, doc in enumerate(repo_documents[:5]):
+                                st.markdown(f"**Document {i+1}**")
+                                st.markdown(f"*Path:* `{doc.metadata.get('source', 'Unknown')}`")
+                                st.markdown("*Content Preview:*")
+                                st.code(doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content)
+                                st.markdown("---")
                         
-                    vector_store = FAISS.load_local(
-                        VECTOR_STORE_DIR, 
-                        embeddings, 
-                        allow_dangerous_deserialization=True
-                    )
-                    
-                    similar_documents = vector_store.similarity_search(
-                        query=query,
-                        k=5  # Limit results to top 5
-                    )
-                    
-                    if similar_documents:
-                        st.subheader("Results by relevance:")
-                        for i, document in enumerate(similar_documents, 1):
-                            with st.expander(f"Result {i}"):
-                                st.markdown(document.page_content)
-                                st.json(document.metadata)
-                    else:
-                        st.info("No relevant documents found for your query.")
-                        
+                        # embeddings = hf_embeddings.embed_documents(repo_documents)
+                        # if embeddings:
+                        #     st.success("Embeddings generated successfully!")
+                        # Generate embeddings
+                        # index = generate_and_store_embeddings(
+                        #     repo_documents, 
+                        #     EMBEDDING_MODEL_NAME
+                        # )
+                        # if index:
+                        #     st.success("Repository processed and indexed successfully!")
+                        # else:
+                        #     st.error("Failed to create index")
                 except Exception as e:
-                    st.error(f"Error processing query: {str(e)}")
+                    st.error(f"Error: {e}")
+        
+        # Search functionality
+        # query = st.text_input("Enter your search query")
+        # if query and st.button("Search"):
+            # with st.spinner("Searching..."):
+            #     try:
+            #         # Load index
+            #         index = load_faiss_index("repository.index")
+            #         if index:
+            #             # Get query embedding
+            #             embeddings = HuggingFaceInferenceAPIEmbeddings(
+            #                 api_key=os.getenv("HF_TOKEN"),
+            #                 model_name=EMBEDDING_MODEL_NAME
+            #             )
+            #             query_embedding = np.array(embeddings.embed_query(query))
+                        
+            #             # Search
+            #             distances, indices = similarity_search(index, query_embedding)
+                        
+            #             # Display results
+            #             st.subheader("Search Results")
+            #             for i, (dist, idx) in enumerate(zip(distances[0], indices[0])):
+            #                 with st.expander(f"Result {i+1} (Distance: {dist:.4f})"):
+            #                     st.write(repo_documents[idx].page_content)
+            #                     st.json(repo_documents[idx].metadata)
+            #     except Exception as e:
+            #         st.error(f"Search error: {str(e)}")
 
 def llm_inference_content():
     """
@@ -149,6 +141,10 @@ def llm_inference_content():
     # Initialize chat history in session state
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
+    
+    # Initialize message for next run
+    if "message" not in st.session_state:
+        st.session_state.message = ""
 
     # LLM selection
     selected_llm = st.selectbox(
@@ -165,30 +161,30 @@ def llm_inference_content():
         with st.container():
             # Display chat history
             for speaker, text in st.session_state.chat_history:
-                message_placeholder = st.empty()
-                with message_placeholder.container():
-                    st.markdown(f"**{speaker}:** {text}")
+                with st.chat_message(speaker.lower()):
+                    st.markdown(text)
             
-            # Input area
+            # Input area with callback
+            def on_input_change():
+                if st.session_state.user_input:
+                    with st.spinner("Generating response..."):
+                        response_text = query_llm(llm, st.session_state.user_input)
+                        st.session_state.chat_history.extend([
+                            ("You", st.session_state.user_input),
+                            ("Assistant", response_text)
+                        ])
+                        st.session_state.message = "Message sent!"
+            
             user_input = st.text_input(
                 "Ask about the repository:",
                 key="user_input",
-                help="Enter your question about the repository"
+                help="Enter your question about the repository",
+                on_change=on_input_change
             )
             
-            # Send button with loading state
-            if st.button("Send", type="primary"):
-                if user_input:
-                    with st.spinner("Generating response..."):
-                        response_text = query_llm(llm, user_input)
-                        st.session_state.chat_history.extend([
-                            ("You", user_input),
-                            ("Assistant", response_text)
-                        ])
-                        # Clear input after sending
-                        st.session_state.user_input = ""
-                else:
-                    st.warning("Please enter a question first")
+            if st.session_state.message:
+                st.success(st.session_state.message)
+                st.session_state.message = ""
     else:
         st.error("Failed to initialize LLM. Please check your configuration.")
 

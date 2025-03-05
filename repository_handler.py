@@ -6,11 +6,11 @@ import shutil
 from anytree import Node
 from constants import REPOSITORY_PATH
 from langchain.schema import Document
-from langchain_community.document_loaders.directory import DirectoryLoader
+from langchain_community.docstore.in_memory import InMemoryDocstore
+# from langchain_community.document_loaders import DocumentLoader
 from langchain_community.document_loaders.git import GitLoader
-from langchain_community.document_loaders.generic import GenericLoader
 from langchain_community.document_loaders.parsers import LanguageParser
-from langchain_text_splitters import Language, RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pathlib import Path
 from typing import List, Optional
 
@@ -41,7 +41,7 @@ LANGUAGE_MAPPING = {
     ".go": "go"
 }
 
-def fetch_repository(
+def load_repository_documents(
         repo_url: str, 
         branch: str = "main", 
         file_filter: Optional[callable] = None) -> List[Document]:
@@ -124,6 +124,17 @@ def split_repository_documents(documents: List[Document]) -> List[Document]:
         print(f"Error processing repository: {e}")
         return []
 
+def get_document_store(documents: List[Document]) -> InMemoryDocstore:
+    """
+    Create an InMemoryDocStore from a list of documents.
+    
+    Args:
+        documents (List[Document]): List of documents
+    """
+    doc_store = InMemoryDocstore()
+    doc_store.add(documents)
+    return doc_store
+
 def build_file_tree(directory, parent=None):
     """ Recursively builds a file tree structure. """
     node = Node(os.path.basename(directory), parent=parent)
@@ -200,13 +211,13 @@ def parse_repository(directory: str) -> List[Document]:
 
     return repo_documents
 
-# if __name__ == "__main__":
-#     repository_docs = fetch_repository(
-#         "https://github.com/ajkulkarni/online-banking-application.git",
-#         branch="master"
-#     )
-#     print(f"Repository contains {len(repository_docs)} documents.")
-#     tree = build_file_tree(REPOSITORY_PATH)
-#     print(tree)
+if __name__ == "__main__":
+    repository_docs = load_repository_documents(
+        "https://github.com/ajkulkarni/online-banking-application.git",
+        branch="master"
+    )
+    print(f"Repository contains {len(repository_docs)} documents.")
+    # tree = build_file_tree(REPOSITORY_PATH)
+    # print(tree)
     # parse_repository("./repository")
-    # print("Repository parsing complete.")
+    print("Repository parsing complete.")
