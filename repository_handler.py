@@ -5,6 +5,7 @@ import networkx as nx
 import shutil
 from anytree import Node
 from constants import REPOSITORY_PATH
+from graphviz import Digraph
 from langchain.schema import Document
 from langchain_community.docstore.in_memory import InMemoryDocstore
 # from langchain_community.document_loaders import DocumentLoader
@@ -145,6 +146,44 @@ def build_file_tree(directory, parent=None):
     
     return node
 
+def visualize_repo_dependencies(repo_path, output_file='repo_dependencies'):
+    """
+    Visualize the file and dependency structure of a repository using Graphviz.
+    Improves layout and ensures a 16:9 aspect ratio.
+    """
+    # Initialize a directed graph
+    dot = Digraph(comment='Repository Dependencies', format='png')
+
+    # Set graph attributes for better layout and 16:9 aspect ratio
+    dot.attr(ratio='16:9', size='20,11.25', rankdir='LR')  # 16:9 ratio, landscape orientation
+    dot.attr('node', shape='box', fontname='Arial', fontsize='10')
+    dot.attr('edge', arrowhead='vee', fontname='Arial', fontsize='8')
+
+    # Traverse the repository
+    for root, dirs, files in os.walk(repo_path):
+        # Add nodes for each file
+        for file in files:
+            file_path = os.path.join(root, file)
+            dot.node(file_path, label=file)
+
+        # Add edges for dependencies (simplified example)
+        for file in files:
+            if file.endswith('.py'):
+                file_path = os.path.join(root, file)
+                with open(file_path, 'r') as f:
+                    lines = f.readlines()
+                    for line in lines:
+                        if line.strip().startswith('import ') or line.strip().startswith('from '):
+                            # Extract the module name (simplified)
+                            module_name = line.strip().split()[1].split('.')[0]
+                            module_path = os.path.join(root, f"{module_name}.py")
+                            if os.path.exists(module_path):
+                                dot.edge(file_path, module_path)
+
+    # Render the graph
+    dot.render(output_file, format='png', cleanup=True)
+    print(f"Graph saved as {output_file}.png")
+
 def build_knowledge_graph(documents):
     """ Builds a knowledge graph from parsed documents. """
     # Initialize the knowledge graph
@@ -212,12 +251,14 @@ def parse_repository(directory: str) -> List[Document]:
     return repo_documents
 
 if __name__ == "__main__":
-    repository_docs = load_repository_documents(
-        "https://github.com/ajkulkarni/online-banking-application.git",
-        branch="master"
-    )
-    print(f"Repository contains {len(repository_docs)} documents.")
-    # tree = build_file_tree(REPOSITORY_PATH)
-    # print(tree)
-    # parse_repository("./repository")
-    print("Repository parsing complete.")
+    # repository_docs = load_repository_documents(
+    #     "https://github.com/ajkulkarni/online-banking-application.git",
+    #     branch="master"
+    # )
+    # print(f"Repository contains {len(repository_docs)} documents.")
+    # # tree = build_file_tree(REPOSITORY_PATH)
+    # # print(tree)
+    # # parse_repository("./repository")
+    # print("Repository parsing complete.")
+    visualize_repo_dependencies(REPOSITORY_PATH)
+    print("Repository visualization complete.")

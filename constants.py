@@ -1,6 +1,7 @@
 REPOSITORY_PATH = "repository"
 EMBEDDING_MODEL_NAME="sentence-transformers/all-MiniLM-L6-v2"
 VECTOR_STORE_DIR="vector_store"
+EMBEDDINGS_DIR="embeddings"
 AVAILABLE_LLMS=[
     "openai-community/gpt2",
     "google-t5/t5-small",

@@ -6,13 +6,17 @@ from constants import REPOSITORY_PATH
 from anytree.exporter import DictExporter
 from repository_handler import build_file_tree
 from repository_handler import (
-    load_repository_documents
+    load_repository_documents,
+    split_repository_documents,
+    get_document_store
 )
 from vectorization_handler import (
     generate_and_save_document_embeddings,
+    load_document_embeddings,
     get_query_embedding,
     create_and_save_faiss_index,
-    load_faiss_vector_store
+    load_faiss_vector_store,
+    create_and_save_faiss_vectorstore
 )
 from llm_handler import (
     get_llm,
@@ -36,7 +40,11 @@ def sidebar_content():
     st.sidebar.header("Repository Settings")
     model_name = st.sidebar.selectbox(
         "Select Embedding Model",
-        ["sentence-transformers/all-MiniLM-L6-v2", "other-model-option"]
+        [
+            "sentence-transformers/all-MiniLM-L6-v2", 
+            "microsoft/codebert-base",
+            "microsoft/codebert-base-mlm",
+        ]
     )
     
     chunk_size = st.sidebar.slider(
@@ -90,47 +98,59 @@ def similarity_search_content():
                                 st.code(doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content)
                                 st.markdown("---")
                         
-                        # embeddings = hf_embeddings.embed_documents(repo_documents)
-                        # if embeddings:
-                        #     st.success("Embeddings generated successfully!")
-                        # Generate embeddings
-                        # index = generate_and_store_embeddings(
-                        #     repo_documents, 
-                        #     EMBEDDING_MODEL_NAME
-                        # )
-                        # if index:
-                        #     st.success("Repository processed and indexed successfully!")
-                        # else:
-                        #     st.error("Failed to create index")
+                        embeddings = generate_and_save_document_embeddings(
+                            processed_documents=repo_documents,
+                            hf_embeddings=hf_embeddings
+                        )
+                        if not embeddings:
+                            st.error("Failed to generate embeddings")
+                            return
+                        st.success("Embeddings generated successfully!")
+                        vector_store = create_and_save_faiss_vectorstore(
+                            documents=repo_documents,
+                            hf_embeddings=hf_embeddings,
+                            index_path=VECTOR_STORE_DIR
+                        )
+                        if not vector_store:
+                            st.error("Failed to create vector store")
+                            return
+                        st.success("Vector store created successfully!")
+                        st.write(f"Vector store saved at: {VECTOR_STORE_DIR}")
+                        st.write(f"Number of embeddings: {len(embeddings)}")
+                        st.write(f"Number of documents: {len(repo_documents)}")
                 except Exception as e:
                     st.error(f"Error: {e}")
         
         # Search functionality
-        # query = st.text_input("Enter your search query")
-        # if query and st.button("Search"):
-            # with st.spinner("Searching..."):
-            #     try:
-            #         # Load index
-            #         index = load_faiss_index("repository.index")
-            #         if index:
-            #             # Get query embedding
-            #             embeddings = HuggingFaceInferenceAPIEmbeddings(
-            #                 api_key=os.getenv("HF_TOKEN"),
-            #                 model_name=EMBEDDING_MODEL_NAME
-            #             )
-            #             query_embedding = np.array(embeddings.embed_query(query))
-                        
-            #             # Search
-            #             distances, indices = similarity_search(index, query_embedding)
-                        
-            #             # Display results
-            #             st.subheader("Search Results")
-            #             for i, (dist, idx) in enumerate(zip(distances[0], indices[0])):
-            #                 with st.expander(f"Result {i+1} (Distance: {dist:.4f})"):
-            #                     st.write(repo_documents[idx].page_content)
-            #                     st.json(repo_documents[idx].metadata)
-            #     except Exception as e:
-            #         st.error(f"Search error: {str(e)}")
+        query = st.text_input("Enter your search query")
+        if query and st.button("Search"):
+            with st.spinner("Searching..."):
+                try:
+                    # Load index
+                    vector_store = load_faiss_vector_store(
+                        index_path=VECTOR_STORE_DIR,
+                        hf_embeddings=hf_embeddings
+                    )
+                    if not vector_store:
+                        st.error("Failed to load vector store")
+                        return
+                    # Perform search
+                    results = vector_store.similarity_search(
+                        query=query,
+                        k=5
+                    )
+                    if not results:
+                        st.error("No results found")
+                        return
+                    st.success(f"Found {len(results)} results")
+                    for i, doc in enumerate(results):
+                        st.markdown(f"**Result {i+1}**")
+                        st.markdown(f"*Path:* `{doc.metadata.get('source', 'Unknown')}`")
+                        st.markdown("*Content Preview:*")
+                        st.code(doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content)
+                        st.markdown("---")
+                except Exception as e:
+                    st.error(f"Search error: {str(e)}")
 
 def llm_inference_content():
     """
@@ -191,4 +211,4 @@ def llm_inference_content():
     # Add clear chat button
     if st.button("Clear Chat History"):
         st.session_state.chat_history = []
-        st.experimental_rerun()
+        st.session_state.message = "Chat history cleared!"

@@ -2,6 +2,7 @@ anytree
 esprima
 faiss-cpu
 gitpython
+graphviz
 huggingface_hub
 langchain
 langchain-core==0.3.34

@@ -42,7 +42,9 @@ def generate_and_save_document_embeddings(
                 return None
             np.savez_compressed("./embeddings/embeddings.npz", embeddings)
             return embeddings
-            
+        except FileNotFoundError as e:
+            print(f"Error finding directory: {e}")
+            return None
         except Exception as e:
             print(f"Error during embedding generation: {e}")
             return None
