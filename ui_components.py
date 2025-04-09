@@ -18,7 +18,7 @@ from vectorization_handler import (
     load_faiss_vector_store,
     create_and_save_faiss_vectorstore
 )
-from llm_handler import (
+from agent_handler import (
     get_llm,
     query_llm
 )
@@ -175,8 +175,8 @@ def llm_inference_content():
 
     # Initialize LLM
     llm = get_llm(selected_llm)
-    
     if llm:
+        st.success("LLM initialized successfully")
         # Chat interface
         with st.container():
             # Display chat history
@@ -212,3 +212,6 @@ def llm_inference_content():
     if st.button("Clear Chat History"):
         st.session_state.chat_history = []
         st.session_state.message = "Chat history cleared!"
+
+def rag_chain_inference_content():
+    pass

@@ -21,7 +21,7 @@ def get_retrieval_qa_chain(llm_model, vector_store):
         return None
 
 if __name__ == '__main__':
-    from llm_handler import get_llm
+    from agent_handler import get_llm
     from vectorization_handler import load_faiss_vector_store
     from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
     from dotenv import load_dotenv
@@ -51,7 +51,11 @@ if __name__ == '__main__':
     print(response)
 
     prompt_template = PromptTemplate(
-        template="You are a digital assistant. You receive the following question: '{query}'. Please provide an answer with a source.",
+        template=
+        """
+        You are a digital assistant. You receive the following question: '{query}'.
+        Please provide an answer with a source.
+        """,
         query_placeholder="{query}"
     )
     prompt = prompt_template.input_variables(query=query)

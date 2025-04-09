@@ -1,5 +1,7 @@
 anytree
+duckduckgo-search
 esprima
+evaluate
 faiss-cpu
 gitpython
 graphviz
@@ -8,11 +10,18 @@ langchain
 langchain-core==0.3.34
 langchain-community==0.3.16
 langchain_huggingface
+matplotlib
 networkx
+pandas
 python-dotenv
+ragas
+seaborn
 sentence-transformers
 streamlit
+scikit-learn
 tree_sitter
 tree_sitter_languages
+umap
+umap-learn
 unstructured
 watchdog

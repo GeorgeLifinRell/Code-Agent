@@ -148,11 +148,11 @@ def create_and_save_faiss_vectorstore(
         index_path: str
         ) -> FAISS:
     """
-    Load FAISS index from disk
+        Creates vector_store for the given documents.
     Args:
-        index_path (str): Path to FAISS index
         documents (List[Document]): List of documents
         hf_embeddings (HuggingFaceInferenceAPIEmbeddings): Hugging Face embeddings
+        index_path (str): Path to FAISS index
     Returns:
         FAISS: FAISS index
     """

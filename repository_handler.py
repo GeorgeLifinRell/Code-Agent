@@ -8,7 +8,6 @@ from constants import REPOSITORY_PATH
 from graphviz import Digraph
 from langchain.schema import Document
 from langchain_community.docstore.in_memory import InMemoryDocstore
-# from langchain_community.document_loaders import DocumentLoader
 from langchain_community.document_loaders.git import GitLoader
 from langchain_community.document_loaders.parsers import LanguageParser
 from langchain_text_splitters import RecursiveCharacterTextSplitter
