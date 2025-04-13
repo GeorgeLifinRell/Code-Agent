@@ -1,5 +1,5 @@
 REPOSITORY_PATH = "repository"
-EMBEDDING_MODEL_NAME="sentence-transformers/all-MiniLM-L6-v2"
+EMBEDDING_MODEL_NAME="jinaai/jina-embeddings-v2-base-code"
 VECTOR_STORE_DIR="vector_store"
 EMBEDDINGS_DIR="embeddings"
 AVAILABLE_LLMS=[

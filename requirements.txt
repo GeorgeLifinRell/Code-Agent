@@ -1,5 +1,6 @@
 anytree
 duckduckgo-search
+einops
 esprima
 evaluate
 faiss-cpu

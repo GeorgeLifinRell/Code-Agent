@@ -1,66 +1,56 @@
 import os
 import dotenv
+import requests
 import streamlit as st
 from langchain_core.documents.base import Document
-from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
-from langchain_community.vectorstores.faiss import FAISS
-from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain_core.vectorstores.base import VectorStore
-import faiss
+from langchain_community.embeddings.huggingface import (
+    HuggingFaceInferenceAPIEmbeddings
+)
+from langchain_community.vectorstores.faiss import FAISS
 import numpy as np
 from typing import List
 
-def generate_and_save_document_embeddings(
-        processed_documents: List[Document],
-        hf_embeddings: HuggingFaceInferenceAPIEmbeddings
-    ):
-    """
-    Get the processed documents of the repository, 
-    create and return the embeddings.
-    """
-    try:
-        # Extract text content from documents
-        texts = [doc.page_content for doc in processed_documents]
-        
-        if not texts:
-            print("No texts found in processed repository")
-            return None
-            
-        # Generate embeddings
-        try:    
-            # Generate embeddings for all texts
-            embeddings = []
-            for text in texts:
-                embedding = hf_embeddings.embed_documents(text)
-                if isinstance(embedding, dict):
-                    embedding = embedding.get('vector', None)
-                if embedding is not None:
-                    embeddings.append(embedding)
-                    
-            if not embeddings:
-                print("No valid embeddings generated")
-                return None
-            np.savez_compressed("./embeddings/embeddings.npz", embeddings)
-            return embeddings
-        except FileNotFoundError as e:
-            print(f"Error finding directory: {e}")
-            return None
-        except Exception as e:
-            print(f"Error during embedding generation: {e}")
-            return None
-            
-    except Exception as e:
-        print(f"Error in generate_and_store_embeddings: {e}")
-        return None
+dotenv.load_dotenv()
 
-def load_document_embeddings(embeddings_path: str='embeddings/embeddings.npz'):
+from typing import List
+from langchain.embeddings.base import Embeddings
+
+class PrecomputedEmbeddings(Embeddings):
+    def __init__(self, document_embeddings: List[List[float]]):
+        self.document_embeddings = document_embeddings
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        """Return precomputed embeddings for documents."""
+        return self.document_embeddings
+
+    def embed_query(self, text: str) -> List[float]:
+        """Handle query embeddings. Adjust as needed."""
+        raise NotImplementedError("Query embedding requires a different method or precomputed values.")
+
+def get_jina_embeddings(documents: List[str]):
+    if not documents:
+        raise ValueError("documents are empty!")
+    data = {
+        "model": "jina-embeddings-v2-base-code",
+        "input": documents
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {os.getenv("JINA_API_KEY")}"
+    }
+    response = requests.post("https://api.jina.ai/v1/embeddings", json=data, headers=headers)
+    print(response.text)
+
+
+def load_embeddings_from_np_file(embeddings_path: str='embeddings/embeddings.npz'):
     """
     Load the document embeddings from the given path
     """
     try:
         # Load the embeddings
         embeddings = np.load(embeddings_path)
-        return embeddings
+        return np.array(embeddings)
     except Exception as e:
         print(f"Error loading embeddings: {e}")
         return None
@@ -83,43 +73,35 @@ def get_query_embedding(query, hf_embeddings: HuggingFaceInferenceAPIEmbeddings)
         print(f"Error initializing embedding model: {e}")
         return None
 
-def create_and_save_faiss_index(embeddings, index_path, hf_embeddings: HuggingFaceInferenceAPIEmbeddings):
-    """
-    Create a FAISS index from the embeddings and save it to disk
-    """
+def get_vector_store(
+        documents: List[Document], 
+        hf_embeddings: HuggingFaceInferenceAPIEmbeddings
+        ) -> FAISS:
+    if not documents:
+        print("No documents provided for vector store creation")
+        return None
+    if not all(isinstance(doc, Document) for doc in documents):
+        print("Invalid document format. Ensure all items are LangChain Document objects.")
+        return None
+
     try:
-        # Get dimension from first embedding
-        dimension = len(embeddings[0])
-        
-        # Convert embeddings to numpy array
-        embeddings_array = np.array(embeddings).astype('float32')
-        
-        # Create FAISS index
-        index = faiss.IndexFlatL2(dimension)
-        
-        # Add vectors to the index
-        index.add(embeddings_array)
-        
-        # Create IDs for the embeddings
-        ids = [str(i) for i in range(len(embeddings))]
-        
-        # Create mapping from IDs to document store
-        index_to_docstore_id = {i: id for i, id in enumerate(ids)}
-        
-        # Initialize FAISS vector store
-        vector_store = FAISS(
-            embedding_function=hf_embeddings,
-            index=index,
-            docstore=InMemoryDocstore({}),  # Start with empty docstore
-            index_to_docstore_id=index_to_docstore_id
+        print(f"Number of documents: {len(documents)}")
+        # Create vector store
+        vector_store = FAISS.from_documents(
+            documents=documents,
+            embedding=hf_embeddings
         )
-        
-        # Save the index to disk
-        vector_store.save_local(index_path)
-        return True
+        assert isinstance(vector_store, VectorStore)
+        return vector_store
     except Exception as e:
-        print(f"Error in create_and_save_faiss_index: {e}")
-        return False
+        # Log detailed error information
+        print(f"Error in get_vector_store: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"API Response: {e.response.text}")
+        return None
+
+def save_faiss_vector_store(vector_store: FAISS, folder_path: str="vector_store"):
+    vector_store.save_local(folder_path=folder_path)
 
 def load_faiss_vector_store(index_path, hf_embeddings:HuggingFaceInferenceAPIEmbeddings) -> FAISS:
     """
@@ -140,31 +122,6 @@ def load_faiss_vector_store(index_path, hf_embeddings:HuggingFaceInferenceAPIEmb
         return vector_store
     except Exception as e:
         st.error(f"Error in query processing: {str(e)}")
-        return None
-    
-def create_and_save_faiss_vectorstore(
-        documents: List[Document], 
-        hf_embeddings: HuggingFaceInferenceAPIEmbeddings,
-        index_path: str
-        ) -> FAISS:
-    """
-        Creates vector_store for the given documents.
-    Args:
-        documents (List[Document]): List of documents
-        hf_embeddings (HuggingFaceInferenceAPIEmbeddings): Hugging Face embeddings
-        index_path (str): Path to FAISS index
-    Returns:
-        FAISS: FAISS index
-    """
-    try:
-        vector_store = FAISS.from_documents(
-            documents=documents,
-            embedding=hf_embeddings
-        )
-        vector_store.save_local(index_path)
-        return vector_store
-    except Exception as e:
-        print(f"Error in load_faiss_vectorstore: {e}")
         return None
 
 def similarity_search_on(vector_store: FAISS, query: str, k: int = 5):

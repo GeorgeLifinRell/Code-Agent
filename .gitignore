@@ -4,3 +4,4 @@ __pycache__
 repository/
 vector_store/
 embeddings/
+embedding-model/

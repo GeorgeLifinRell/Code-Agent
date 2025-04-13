@@ -38,5 +38,4 @@ with llm_inference_tab:
 
 # RAG Chain Inference tab content
 with rag_chain_inference_tab:
-    st.write("RAG Chain Inference content goes here...")
     rag_chain_inference_content()
